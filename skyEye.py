@@ -502,13 +502,5 @@ def main():
 		exit()
 
 if __name__=='__main__':
-	# subsidiary('中国电信集团有限公司')
-	# main('北京百度网讯科技有限公司')
-	# getICP('中国电信集团有限公司')
-	# getWechat("上海拉扎斯信息科技有限公司")
-	# getApp("上海拉扎斯信息科技有限公司")
-	# getICP('北京百度网讯科技有限公司')
-	# print(re_parser())
-	# print(2/10000)
 	main()
 	
