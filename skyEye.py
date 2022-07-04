@@ -2,7 +2,7 @@
 # @Author: Longda
 # @Date:   2022-07-01 16:56:38
 # @Last Modified by:   longda
-# @Last Modified time: 2022-07-04 12:40:06
+# @Last Modified time: 2022-07-04 13:07:22
 import requests
 import json
 import time
@@ -502,7 +502,18 @@ def main(args):
 	except KeyboardInterrupt as e:
 		exit()
 
+def banner():
+	print('''
+					__           ___________             
+				  _____|  | _____.__.\_   _____/__.__. ____  
+				 /  ___/  |/ <   |  | |    __)<   |  |/ __ \ 
+				 \___ \|    < \___  | |        \___  \  ___/ 
+				/____  >__|_ \/ ____|/_______  / ____|\___  >
+				     \/     \/\/             \/\/         \/ 
+     							https://github.com/kingofpeoples
+     										--by LongDa''')
 if __name__=='__main__':
+	banner()
 	if len(sys.argv) <= 1:
 			sys.argv.append('-h')
 	if not os.path.exists('./config.yaml'):
