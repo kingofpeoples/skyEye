@@ -2,41 +2,51 @@
 # @Author: Longda
 # @Date:   2022-07-01 16:56:38
 # @Last Modified by:   longda
-# @Last Modified time: 2022-07-03 03:47:18
+# @Last Modified time: 2022-07-04 12:40:06
 import requests
 import json
 import time
 import sys
 import os
 import argparse
+from ruamel.yaml import YAML
 from pyquery import PyQuery as pq
 from urllib.parse import quote
 requests.packages.urllib3.disable_warnings()
 
 # 写token
 def writeToken(token):
+	key = [token.split("=")[0]]
+	value = [token.split("=")[1]]
+	token=dict(zip(key,value))
+	# print(token)
+	yaml = YAML()
 	with open("./config.yaml","w",encoding='utf-8') as f:
-		f.writelines(token)
+		yaml.dump(token,f)
 
 # 获取token
 def getToken():
+	yaml = YAML(typ='safe')
 	with open("./config.yaml","r",encoding='utf-8') as f:
-		token = f.readlines()[0].strip()
-		#判断token是否有效
-		flag = checkToken(token)
-		if flag:
-			return token
-		else:
-			print("[!] token已经过期，请重新指定token或写到config.yaml")
-			while True:
-				token = input("$ Input Token > ")	
-				if "auth_token=" not in token:
-					token = "auth_token="+token
-				if token=='auth_token=' or checkToken(token)==False:
-					continue
-				else:
-					break
-			return token
+		tokenDict = yaml.load(f)
+	key = list(tokenDict.keys())[0]
+	value = list(tokenDict.values())[0]
+	token = key+"="+value
+	#判断token是否有效
+	flag = checkToken(token)
+	if flag:
+		return token
+	else:
+		print("[!] token已经过期，请重新指定token或直接写到config.yaml")
+		while True:
+			token = input("$ Token > ")	
+			if "auth_token=" not in token:
+				token = "auth_token="+token
+			if token=='auth_token=' or checkToken(token)==False:
+				continue
+			else:
+				break
+		return token
 
 #验证token有效型
 def checkToken(token):
@@ -63,14 +73,15 @@ def outPrint(results):
 # 处理结果函数
 def dealResult(results):
 	temp = []
-	for item in results:
-		if isinstance(item,list):
-			if item[0]!="" and item[1]!="" and item[2]!=None:
+	if results:
+		for item in results:
+			if isinstance(item,list):
+				if item[0]!="" and item[1]!="" and item[2]!=None:
 
-				temp.append(item)
-		elif isinstance(item,str):
-			if item!=" ":
-				temp.append(item)
+					temp.append(item)
+			elif isinstance(item,str):
+				if item!="":
+					temp.append(item)
 	return temp
 
 # 获取公司Gid/公司全称
@@ -105,7 +116,7 @@ def getGId(companyName):
 		exit()
 
 # 获取控股子公司
-def subsidiary(gid,rate,delay):
+def subsidiary(company,gid,rate,delay):
 	try:
 		myDatas = []
 		if rate<90:
@@ -130,22 +141,22 @@ def subsidiary(gid,rate,delay):
 		#先获取第一页
 		if results:
 			for item in results:
-				myDatas.append([item['name'],item['percent'],item['regStatus']])
-		#页数
-		if total%10==0:
-			pageNums = total//10
-		else:
-			pageNums = total//10 + 1
-		#遍历页数获取	
-		if pageNums > 2:
-			for page in range(2,pageNums+1):
-				time.sleep(delay/10)
-				data = data = {"gid":gid,"pageSize":10,"pageNum":page,"province":"-100","percentLevel":rateList[rate],"category":"-100"}
-				resData = requests.post(url=url,json=data,headers=header,verify=False).json()["data"]
-				results = resData['result']
-				if results:
-					for item in results:
-						myDatas.append([item['name'],item['percent'],item['regStatus']])		
+				myDatas.append([company,item['percent'],item['name'],item['regStatus']])
+			#页数
+			if total%10==0:
+				pageNums = total//10
+			else:
+				pageNums = total//10 + 1
+			#遍历页数获取	
+			if pageNums >= 2:
+				for page in range(2,pageNums+1):
+					time.sleep(delay/10)
+					data = data = {"gid":gid,"pageSize":10,"pageNum":page,"province":"-100","percentLevel":rateList[rate],"category":"-100"}
+					resData = requests.post(url=url,json=data,headers=header,verify=False).json()["data"]
+					results = resData['result']
+					if results:
+						for item in results:
+							myDatas.append([company,item['percent'],item['name'],item['regStatus']])		
 		return myDatas
 	except Exception as e:
 		return myDatas
@@ -170,9 +181,9 @@ def getICP(company,gid,token,delay):
 			for item in Trs:
 				ym = item.find('td:nth-child(5)').text()
 				icpNum = item.find('td:nth-child(6) span').text()
-				ICPData.append([ym,icpNum])
+				ICPData.append([company,ym,icpNum])
 			if ICPData:
-				print("\n[+] 开始获取备案信息：",company)
+				print("\n[+] 开始获取ICP备案信息：",company)
 				outPrint(ICPData)
 		while True:
 			time.sleep(delay/10)
@@ -189,7 +200,7 @@ def getICP(company,gid,token,delay):
 						for item in Trs:
 							ym = item.find('td:nth-child(5)').text()
 							icpNum = item.find('td:nth-child(6) span').text()
-							tempData.append([ym,icpNum])
+							tempData.append([company,ym,icpNum])
 						outPrint(tempData)
 						tempData0 = tempData
 						ICPData += tempData
@@ -222,7 +233,6 @@ def getWechat(company,gid,token,delay):
 				gzh = item.find('td:nth-child(2) table tr td:nth-child(2) span').text()
 				wxh = item.find('td:nth-child(3) span').text()
 				ewm = item.find('td:nth-child(4) img').attr("data-src")
-				# print("  ",[gzh,wxh,ewm])
 				wechatData.append([gzh,wxh,ewm])
 			wechatData = dealResult(wechatData)
 			if wechatData:
@@ -248,7 +258,7 @@ def getWechat(company,gid,token,delay):
 							# print("  ",[gzh,wxh,ewm])
 							tempData.append([gzh,wxh,ewm])
 						tempData = dealResult(tempData)
-						outPrint(wechatData)
+						outPrint(tempData)
 						tempData0 = tempData
 						wechatData += tempData
 						continue
@@ -258,8 +268,6 @@ def getWechat(company,gid,token,delay):
 					break
 			else:
 				break
-		# print(wechatData)
-		# outPrint(wechatData)
 		return wechatData
 	except Exception as e:
 		return wechatData
@@ -301,7 +309,7 @@ def getApp(company,gid,token,delay):
 						for item in Trs:
 							tempData.append(item.find('td:nth-child(3) span').text())
 						tempData = dealResult(tempData)
-						outPrint(appData)
+						outPrint(tempData)
 						tempData0 = tempData
 						appData += tempData
 						continue
@@ -320,11 +328,11 @@ def getApp(company,gid,token,delay):
 def getAllSubsidiary(company,gid,deep,rate,delay):
 	try:
 		print("\n[+] 开始获取控股子公司信息:",company)
-		myDatas = [[company,'100%','存续（在营、开业、在册)']]
+		myDatas = [[company,'100%',company,'存续（在营、开业、在册)']]
 		allKongGu = myDatas
 		#一级控股
 		index = 1
-		temp = subsidiary(gid,rate,delay)
+		temp = subsidiary(company,gid,rate,delay)
 		if temp:
 			print(f" [*] 控股< {index} >级子公司:")
 			outPrint(temp)
@@ -334,8 +342,8 @@ def getAllSubsidiary(company,gid,deep,rate,delay):
 			if temp:
 				temp1 = []
 				for item in temp:
-					company,gid = getGId(item[0])
-					temp0 = subsidiary(gid,rate,delay)
+					company,gid = getGId(item[2])
+					temp0 = subsidiary(company,gid,rate,delay)
 					if temp0:
 						temp1 += temp0
 				if temp1:
@@ -360,8 +368,8 @@ def re_parser():
 	parser.add_argument("-d", "--deep", type=int, help="控股子公司递归查询深度,默认n级 [1/2/3/.../n]", default=100)
 	parser.add_argument("-m", "--mode", type=str, help="指定搜索模块，默认all(多个以[,]隔开) [subCompany/icp/wechat/app]", default='all')
 	parser.add_argument("-s", "--delay", type=int, help="请求延迟，防止被ban,默认1秒", default=1)
-	parser.add_argument("-t", "--token", type=str, help="指定token,似乎有20天+的有效期,一次指定短期可用,默认空", default='')
-	parser.add_argument("-u", "--target", type=str, help="查询目标名称(必须指定,可简称/关键字)")
+	parser.add_argument("-T", "--token", type=str, help="指定token,似乎有20天+的有效期,一次指定短期可用,默认空", default='')
+	parser.add_argument("-t", "--target", type=str, help="查询目标名称(必须指定,可简称/关键字)")
 	parser.add_argument("-ci", "--childICP", type=bool, help="是否查询控股子公司ICP备案信息,默认False", default=False)
 	parser.add_argument("-cw", "--childWechat", type=bool, help="是否查询控股子公司微信公众号信息,默认False", default=False)
 	parser.add_argument("-ca", "--childAPP", type=bool, help="是否查询控股子公司APP信息,默认False", default=False)
@@ -370,25 +378,17 @@ def re_parser():
 	return args
 
 # 主函数
-def main():
+def main(args):
 	try:
-		if len(sys.argv) <= 1:
-			sys.argv.append('-h')
-		if not os.path.exists('./config.yaml'):
-			writeToken("auth_token=xxxxxxxxxx")
-		args = re_parser()
+		AllSubsidiary,ICP,wechat,app = [],[],[],[]
 		company,gid = getGId(args.target)
-		print(f"[+] 当前公司信息：{company}, GID：{gid}")
-		flag = input("$ continue(Y/N) > ")
-		ICP = []
-		wechat = []
-		app = []
-		AllSubsidiary = []
-		if flag.upper() == 'Y' or flag=='':
+		print(f"$ 当前公司信息：{company}, GID：{gid}")
+		flag = input("$ continue(Y/n) > ")
+		if flag.upper() != 'N':
 			if args.mode == 'all':
 				# subCompany
 				AllSubsidiary += getAllSubsidiary(company,gid,args.deep,args.rate,args.delay)
-				#token
+				#获取token并验证有效性
 				if args.token=='':
 					token = getToken()
 				else:
@@ -404,34 +404,33 @@ def main():
 				#all
 				if args.childALL:
 					for item in AllSubsidiary:
-						company,gid = getGId(item[0])
+						company,gid = getGId(item[2])
 						ICP += getICP(company,gid,token,args.delay)
 					for item in AllSubsidiary:
-						company,gid = getGId(item[0])
+						company,gid = getGId(item[2])
 						wechat += getWechat(company,gid,token,args.delay)
 					for item in AllSubsidiary:
-						company,gid = getGId(item[0])
+						company,gid = getGId(item[2])
 						app += getApp(company,gid,token,args.delay)
 				else:
+					#ICP
 					ICP += getICP(company,gid,token,args.delay)
+					if args.childICP:
+						for item in AllSubsidiary[1:]:
+							companyitem,giditem = getGId(item[2])
+							ICP += getICP(companyitem,giditem,token,args.delay)
+					#wechat
 					wechat += getWechat(company,gid,token,args.delay)
+					if args.childWechat:
+						for item in AllSubsidiary[1:]:
+							companyitem,giditem = getGId(item[2])
+							wechat += getWechat(companyitem,giditem,token,args.delay)
+					#app
 					app += getApp(company,gid,token,args.delay)
-				#ICP
-				if args.childICP:
-					for item in AllSubsidiary[1:]:
-						company,gid = getGId(item[0])
-						ICP += getICP(company,gid,token,args.delay)
-						app += getApp(company,gid,token,args.delay)
-				#wechat
-				if args.childWechat:
-					for item in AllSubsidiary[1:]:
-						company,gid = getGId(item[0])
-						wechat += getWechat(company,gid,token,args.delay)
-				#app
-				if args.childAPP:
-					for item in AllSubsidiary[1:]:
-						company,gid = getGId(item[0])
-						app += getApp(company,gid,token,args.delay)
+					if args.childAPP:
+						for item in AllSubsidiary[1:]:
+							companyitem,giditem = getGId(item[2])
+							app += getApp(companyitem,giditem,token,args.delay)
 			else:
 				if 'subCompany' in args.mode.split(","):
 					AllSubsidiary += getAllSubsidiary(company,gid,args.deep,args.rate,args.delay)
@@ -493,7 +492,9 @@ def main():
 						writeToken(token)
 					app += getApp(company,gid,token,args.delay)
 		else:
-			exit()
+			company = input("$ Input company > ")
+			args.target = company
+			main(args)
 		return AllSubsidiary,ICP,wechat,app
 	except Exception as e:
 		print("Error：",e)
@@ -502,5 +503,10 @@ def main():
 		exit()
 
 if __name__=='__main__':
-	main()
+	if len(sys.argv) <= 1:
+			sys.argv.append('-h')
+	if not os.path.exists('./config.yaml'):
+		writeToken("auth_token=xxxxxxxxxx")
+	args = re_parser()
+	main(args)
 	
